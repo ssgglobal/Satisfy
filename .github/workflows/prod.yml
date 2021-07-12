@@ -1,0 +1,46 @@
+name: Production
+
+on:
+  push:
+    branches: [ jpierce ]
+
+jobs:
+
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - uses: actions/checkout@v2
+      - run: echo BUILD_ENV='test' >> $GITHUB_ENV
+      - run: echo ECR_REPO='satis/satisfy' >> $GITHUB_ENV
+        #- run: echo ECR_TAGS='latest,${{ env.REL_VERSION }}' >> $GITHUB_ENV
+      - run: echo ECR_TAGS='latest' >> $GITHUB_ENV
+
+
+      - name: Use PHP 7.4
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '7.4'
+
+      - name: PHP Composer
+        run: |
+          composer config --global github-oauth.github.com ${{ secrets.DSEBOT_GH_TOKEN }}
+          composer install --no-dev --no-progress --no-suggest -o -n
+          composer create-project playbloom/satisfy
+
+
+      - name: Build, tag, and push image to Amazon ECR
+        uses: kciter/aws-ecr-action@v1
+        with:
+          access_key_id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          secret_access_key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          account_id: ${{ secrets.AWS_ACCOUNT_ID }}
+          dockerfile: ./docker/Dockerfile
+          extra_build_args: --build-arg BUILD=${{ env.BUILD_ENV }}
+          region: ${{ secrets.AWS_DEFAULT_REGION }}
+          repo: ${{ env.ECR_REPO }}
+          create_repo: true
+          tags: ${{ env.ECR_TAGS }}
+
